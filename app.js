@@ -3,13 +3,13 @@ import { getDatabase, ref, set, onValue, update, onDisconnect, remove } from "ht
 
 // 1. Initialize Firebase (Replace with your actual config)
 const firebaseConfig = {
-    apiKey: "YOUR_API_KEY",
-    authDomain: "YOUR_AUTH_DOMAIN",
-    databaseURL: "YOUR_DATABASE_URL", // Critical: Ensure this is your Realtime Database URL
-    projectId: "YOUR_PROJECT_ID",
-    storageBucket: "YOUR_STORAGE_BUCKET",
-    messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-    appId: "YOUR_APP_ID"
+  apiKey: "AIzaSyCqcVmes8Ie-u_cQ0uP8T3KGqTMinxPwK0",
+  authDomain: "thps-live-slides.firebaseapp.com",
+  databaseURL: "https://thps-live-slides-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "thps-live-slides",
+  storageBucket: "thps-live-slides.firebasestorage.app",
+  messagingSenderId: "559550645484",
+  appId: "1:559550645484:web:419bc6be49c309a1fb91c9"
 };
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
