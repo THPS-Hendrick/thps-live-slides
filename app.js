@@ -10,45 +10,197 @@ const firebaseConfig = {
   messagingSenderId: "559550645484",
   appId: "1:559550645484:web:419bc6be49c309a1fb91c9"
 };
+const firebaseConfig = { /* ... */ };
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
+// DOM Elements
 const lobbyUI = document.getElementById('lobby-ui');
+const hostDashboard = document.getElementById('host-dashboard');
 const hostUI = document.getElementById('host-ui');
 const playerUI = document.getElementById('player-ui');
-const roomInput = document.getElementById('room-code');
-const initialsInput = document.getElementById('player-initials');
 
+// App State
 let currentRoom = null;
 let myPlayerId = `p_${Math.random().toString(36).substr(2, 9)}`;
 let players = {}; 
 
+// Presentation Data Structure
+const presentations = {
+    pitch: [
+        { title: "Pitch Like a Pro", type: "title", roam: true },
+        { title: "Rule 1: Hook the Audience", type: "content", roam: false }, // Sprites pushed out
+        { title: "Survey: Do you get nervous?", type: "survey", roam: true, zones: ["Yes", "No"] }
+    ],
+    network: [
+        { title: "Networking Skills", type: "title", roam: true },
+        { title: "The Handshake", type: "content", roam: false }
+    ]
+};
+
+let currentLevel = [];
+let slideIndex = 0;
+let slideRect = { x: 0, y: 0, w: 0, h: 0 }; // The 16:9 boundary
+
 // ==========================================
-// HOST LOGIC
+// HOST: START & LEVEL SELECT
 // ==========================================
 document.getElementById('host-btn').addEventListener('click', () => {
     currentRoom = Math.floor(1000 + Math.random() * 9000).toString();
-    
-    // Initialize room with a player_count of 0
-    set(ref(db, `rooms/${currentRoom}`), { 
-        created: Date.now(), 
-        player_count: 0, 
-        players: {} 
-    });
-    
+    set(ref(db, `rooms/${currentRoom}`), { created: Date.now(), player_count: 0, players: {} });
     onDisconnect(ref(db, `rooms/${currentRoom}`)).remove();
 
     lobbyUI.classList.add('hidden');
-    hostUI.classList.remove('hidden');
-    document.getElementById('display-room-code').innerText = currentRoom;
-
-    onValue(ref(db, `rooms/${currentRoom}/players`), (snapshot) => {
-        players = snapshot.val() || {};
-        drawCanvas();
-    });
-
-    initCanvas();
+    hostDashboard.classList.remove('hidden');
+    document.getElementById('dash-room-code').innerText = currentRoom;
 });
+
+// Host clicks a specific presentation
+document.querySelectorAll('.level-select-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+        const levelKey = e.target.getAttribute('data-level');
+        currentLevel = presentations[levelKey];
+        slideIndex = 0;
+
+        hostDashboard.classList.add('hidden');
+        hostUI.classList.remove('hidden');
+        document.getElementById('display-room-code').innerText = currentRoom;
+        
+        onValue(ref(db, `rooms/${currentRoom}/players`), (snapshot) => {
+            players = snapshot.val() || {};
+            drawCanvas();
+        });
+
+        initCanvas();
+        setupClicker();
+    });
+});
+
+// ==========================================
+// HOST: CLICKER & PHYSICS
+// ==========================================
+function setupClicker() {
+    window.addEventListener('keydown', (e) => {
+        // USB Clickers usually send PageDown/PageUp or Arrows
+        if (['ArrowRight', 'PageDown', ' '].includes(e.key)) {
+            if (slideIndex < currentLevel.length - 1) {
+                slideIndex++;
+                handleSlideTransition();
+            }
+        } else if (['ArrowLeft', 'PageUp'].includes(e.key)) {
+            if (slideIndex > 0) {
+                slideIndex--;
+                handleSlideTransition();
+            }
+        }
+    });
+}
+
+function handleSlideTransition() {
+    document.getElementById('slide-counter').innerText = `Slide ${slideIndex + 1}/${currentLevel.length}`;
+    const slideRules = currentLevel[slideIndex];
+
+    // THE SWEEP: If roam is false, forcefully push all sprites outside the 16:9 slide
+    if (!slideRules.roam) {
+        let updates = {};
+        Object.keys(players).forEach(pid => {
+            let p = players[pid];
+            // Check if player is inside the slide boundary
+            if (p.x > slideRect.x && p.x < slideRect.x + slideRect.w &&
+                p.y > slideRect.y && p.y < slideRect.y + slideRect.h) {
+                
+                // Throw them below the slide
+                updates[`rooms/${currentRoom}/players/${pid}/y`] = slideRect.y + slideRect.h + 50;
+                // Alternatively, throw them left/right based on where they are
+            }
+        });
+        
+        // Execute a single mass-update to Firebase
+        if (Object.keys(updates).length > 0) {
+            update(ref(db), updates);
+        }
+    }
+    drawCanvas();
+}
+
+// ==========================================
+// RENDER LOGIC (Host Canvas)
+// ==========================================
+const canvas = document.getElementById('game-canvas');
+const ctx = canvas.getContext('2d');
+
+function initCanvas() {
+    window.addEventListener('resize', calculateSlideBoundary);
+    calculateSlideBoundary();
+    handleSlideTransition(); // Init first slide
+}
+
+function calculateSlideBoundary() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    
+    // Calculate perfect 16:9 box in center of screen
+    let targetRatio = 16 / 9;
+    let windowRatio = canvas.width / canvas.height;
+    
+    if (windowRatio > targetRatio) {
+        slideRect.h = canvas.height * 0.8; // Leave 20% margin
+        slideRect.w = slideRect.h * targetRatio;
+    } else {
+        slideRect.w = canvas.width * 0.8;
+        slideRect.h = slideRect.w / targetRatio;
+    }
+    
+    slideRect.x = (canvas.width - slideRect.w) / 2;
+    slideRect.y = (canvas.height - slideRect.h) / 2;
+    drawCanvas();
+}
+
+function drawCanvas() {
+    if(!currentLevel[slideIndex]) return;
+    
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const slide = currentLevel[slideIndex];
+    
+    // Draw the 16:9 Slide Background
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(slideRect.x, slideRect.y, slideRect.w, slideRect.h);
+    
+    // Draw Slide Title
+    ctx.fillStyle = '#000000';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = 'bold 40px sans-serif';
+    ctx.fillText(slide.title, slideRect.x + (slideRect.w/2), slideRect.y + (slideRect.h/2));
+
+    // Draw Dominoes
+    const width = 36, height = 54;
+    Object.values(players).forEach(p => {
+        ctx.fillStyle = p.color;
+        ctx.fillRect(p.x - width/2, p.y - height/2, width, height);
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(p.x - width/2, p.y - height/2, width, height);
+        
+        ctx.beginPath();
+        ctx.moveTo(p.x - width/2, p.y);
+        ctx.lineTo(p.x + width/2, p.y);
+        ctx.stroke();
+
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 14px sans-serif';
+        ctx.shadowColor = "rgba(0,0,0,0.5)";
+        ctx.shadowBlur = 4;
+        ctx.fillText(p.initials, p.x, p.y - height/4);
+        ctx.fillText(p.number, p.x, p.y + height/4);
+        ctx.shadowBlur = 0;
+    });
+}
+
+// ==========================================
+// PLAYER LOGIC (Abbreviated, keep your existing player join code here)
+// ==========================================
+// [PASTE YOUR EXISTING document.getElementById('join-btn') logic here]
 
 // ==========================================
 // PLAYER LOGIC
