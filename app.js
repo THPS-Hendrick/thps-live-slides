@@ -1,7 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
-import { getDatabase, ref, set, onValue, update, onDisconnect, remove } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
+import { getDatabase, ref, set, onValue, update, onDisconnect, runTransaction } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 
-// 1. Initialize Firebase (Replace with your actual config)
 const firebaseConfig = {
   apiKey: "AIzaSyCqcVmes8Ie-u_cQ0uP8T3KGqTMinxPwK0",
   authDomain: "thps-live-slides.firebaseapp.com",
@@ -14,38 +13,36 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
-// DOM Elements
 const lobbyUI = document.getElementById('lobby-ui');
 const hostUI = document.getElementById('host-ui');
 const playerUI = document.getElementById('player-ui');
 const roomInput = document.getElementById('room-code');
+const initialsInput = document.getElementById('player-initials');
 
-// App State
 let currentRoom = null;
 let myPlayerId = `p_${Math.random().toString(36).substr(2, 9)}`;
 let players = {}; 
 
 // ==========================================
-// HOST LOGIC (The Screen)
+// HOST LOGIC
 // ==========================================
 document.getElementById('host-btn').addEventListener('click', () => {
-    // Generate random 4-digit code
     currentRoom = Math.floor(1000 + Math.random() * 9000).toString();
     
-    // Create room in Firebase
-    set(ref(db, `rooms/${currentRoom}`), { created: Date.now(), players: {} });
+    // Initialize room with a player_count of 0
+    set(ref(db, `rooms/${currentRoom}`), { 
+        created: Date.now(), 
+        player_count: 0, 
+        players: {} 
+    });
     
-    // Clean up room when host closes window
     onDisconnect(ref(db, `rooms/${currentRoom}`)).remove();
 
-    // UI Updates
     lobbyUI.classList.add('hidden');
     hostUI.classList.remove('hidden');
     document.getElementById('display-room-code').innerText = currentRoom;
 
-    // Listen for players moving
-    const playersRef = ref(db, `rooms/${currentRoom}/players`);
-    onValue(playersRef, (snapshot) => {
+    onValue(ref(db, `rooms/${currentRoom}/players`), (snapshot) => {
         players = snapshot.val() || {};
         drawCanvas();
     });
@@ -54,59 +51,78 @@ document.getElementById('host-btn').addEventListener('click', () => {
 });
 
 // ==========================================
-// PLAYER LOGIC (The Mobile Controller)
+// PLAYER LOGIC
 // ==========================================
 document.getElementById('join-btn').addEventListener('click', () => {
     const code = roomInput.value.toUpperCase();
+    const initials = initialsInput.value.toUpperCase();
+    
     if (code.length !== 4) return alert("Enter a 4-digit code");
+    if (initials.length < 1) return alert("Enter your initials");
 
-    // Check if room exists
     onValue(ref(db, `rooms/${code}/created`), (snapshot) => {
-        if (!snapshot.exists()) {
-            return alert("Room not found!");
-        }
-
+        if (!snapshot.exists()) return alert("Room not found!");
         currentRoom = code;
-        const myColor = `#${Math.floor(Math.random()*16777215).toString(16)}`; // Random hex
 
-        // Add player to room
-        const myPlayerRef = ref(db, `rooms/${currentRoom}/players/${myPlayerId}`);
-        set(myPlayerRef, { x: 400, y: 300, color: myColor });
+        // Atomic transaction to secure the next available join number
+        const countRef = ref(db, `rooms/${currentRoom}/player_count`);
         
-        // Remove player when they close their phone
-        onDisconnect(myPlayerRef).remove();
+        runTransaction(countRef, (currentCount) => {
+            return (currentCount || 0) + 1;
+        }).then((result) => {
+            if (!result.committed) return alert("Failed to join room.");
+            
+            // Subtract 1 so the first player is 00, second is 01, etc.
+            const joinNumber = result.snapshot.val() - 1; 
+            
+            // Format number as string with leading zero (00, 01... 99)
+            const formattedNumber = joinNumber.toString().padStart(2, '0');
+            
+            // Generate a distinct color using the Golden Angle (137.5 degrees)
+            // This ensures colors are visually separated even if 100 people join
+            const hue = (joinNumber * 137.5) % 360;
+            const myColor = `hsl(${hue}, 70%, 50%)`;
 
-        // UI Updates
-        lobbyUI.classList.add('hidden');
-        playerUI.classList.remove('hidden');
-        document.getElementById('player-color-indicator').style.backgroundColor = myColor;
+            const myPlayerRef = ref(db, `rooms/${currentRoom}/players/${myPlayerId}`);
+            
+            set(myPlayerRef, { 
+                x: window.innerWidth / 2, // Spawn in middle of screen
+                y: window.innerHeight - 100, 
+                color: myColor,
+                initials: initials.substring(0, 2),
+                number: formattedNumber
+            });
+            
+            onDisconnect(myPlayerRef).remove();
 
-        setupControls(myPlayerRef);
+            // Update Mobile UI
+            lobbyUI.classList.add('hidden');
+            playerUI.classList.remove('hidden');
+            
+            const dominoNode = document.getElementById('player-domino');
+            dominoNode.style.backgroundColor = myColor;
+            document.getElementById('domino-initials').innerText = initials;
+            document.getElementById('domino-number').innerText = formattedNumber;
+
+            setupControls(myPlayerRef);
+        });
+
     }, { onlyOnce: true });
 });
 
 function setupControls(playerRef) {
-    const speed = 20;
+    const speed = 25; // slightly faster for responsiveness
     
-    // Abstract button logic to update Firebase X/Y
     const move = (dx, dy) => {
-        // Read current local state (simplified for MVP, ideally read from snapshot)
-        // We will just send an increment to Firebase
         const updateRef = ref(db, `rooms/${currentRoom}/players/${myPlayerId}`);
-        
-        // Fetch current position and add to it
         onValue(updateRef, (snap) => {
             if (snap.exists()) {
                 const data = snap.val();
-                update(updateRef, { 
-                    x: data.x + dx, 
-                    y: data.y + dy 
-                });
+                update(updateRef, { x: data.x + dx, y: data.y + dy });
             }
         }, { onlyOnce: true });
     };
 
-    // Attach to D-Pad
     document.getElementById('btn-up').addEventListener('pointerdown', () => move(0, -speed));
     document.getElementById('btn-down').addEventListener('pointerdown', () => move(0, speed));
     document.getElementById('btn-left').addEventListener('pointerdown', () => move(-speed, 0));
@@ -130,17 +146,41 @@ function initCanvas() {
 }
 
 function drawCanvas() {
-    // Clear screen
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
-    // Draw all players
+    const width = 36;
+    const height = 54;
+    
     Object.values(players).forEach(p => {
+        // Draw Domino Base
         ctx.fillStyle = p.color;
+        ctx.fillRect(p.x - width/2, p.y - height/2, width, height);
+        
+        // Draw Domino Border
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(p.x - width/2, p.y - height/2, width, height);
+        
+        // Draw Center Divider line
         ctx.beginPath();
-        ctx.arc(p.x, p.y, 20, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = '#fff';
-        ctx.lineWidth = 3;
+        ctx.moveTo(p.x - width/2, p.y);
+        ctx.lineTo(p.x + width/2, p.y);
         ctx.stroke();
+
+        // Draw Text (Initials on top, Number on bottom)
+        ctx.fillStyle = '#ffffff';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.font = 'bold 14px sans-serif';
+        
+        // Add text shadow for legibility
+        ctx.shadowColor = "rgba(0,0,0,0.5)";
+        ctx.shadowBlur = 4;
+        
+        ctx.fillText(p.initials, p.x, p.y - height/4);
+        ctx.fillText(p.number, p.x, p.y + height/4);
+        
+        // Reset shadow for next draw
+        ctx.shadowBlur = 0;
     });
 }
