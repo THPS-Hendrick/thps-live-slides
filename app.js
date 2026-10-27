@@ -13,247 +13,227 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
-// DOM Elements
-const lobbyUI = document.getElementById('lobby-ui');
-const hostDashboard = document.getElementById('host-dashboard');
-const hostUI = document.getElementById('host-ui');
-const playerUI = document.getElementById('player-ui');
-const roomInput = document.getElementById('room-code');
-const initialsInput = document.getElementById('player-initials');
-
-// App State
+// State
 let currentRoom = null;
 let myPlayerId = `p_${Math.random().toString(36).substr(2, 9)}`;
 let players = {}; 
-
-// Presentation Data Structure
-const presentations = {
-    pitch: [
-        { title: "Pitch Like a Pro", type: "title", roam: true },
-        { title: "Rule 1: Hook the Audience", type: "content", roam: false }, // Sprites pushed out
-        { title: "Survey: Do you get nervous?", type: "survey", roam: true, zones: ["Yes", "No"] }
-    ],
-    network: [
-        { title: "Networking Skills", type: "title", roam: true },
-        { title: "The Handshake", type: "content", roam: false }
-    ]
-};
-
-let currentLevel = [];
+let currentDeck = null;
 let slideIndex = 0;
-let slideRect = { x: 0, y: 0, w: 0, h: 0 }; // The 16:9 boundary
+
+// Host Slide Geometry (Normalized 0 to 1000 scale)
+const LOGICAL_WIDTH = 1000;
+const LOGICAL_HEIGHT = 562; // 16:9
 
 // ==========================================
-// HOST: START & LEVEL SELECT
+// HOST ENGINE
 // ==========================================
-document.getElementById('host-btn').addEventListener('click', () => {
+document.getElementById('host-btn').addEventListener('click', async () => {
     currentRoom = Math.floor(1000 + Math.random() * 9000).toString();
     set(ref(db, `rooms/${currentRoom}`), { created: Date.now(), player_count: 0, players: {} });
     onDisconnect(ref(db, `rooms/${currentRoom}`)).remove();
 
-    lobbyUI.classList.add('hidden');
-    hostDashboard.classList.remove('hidden');
+    document.getElementById('lobby-ui').classList.add('hidden');
+    document.getElementById('host-dashboard').classList.remove('hidden');
     document.getElementById('dash-room-code').innerText = currentRoom;
-});
 
-document.querySelectorAll('.level-select-btn').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-        const levelKey = e.target.getAttribute('data-level');
-        currentLevel = presentations[levelKey];
-        slideIndex = 0;
+    // Fetch Available Decks
+    const deckList = document.getElementById('deck-list');
+    deckList.innerHTML = `<button class="deck-select bg-blue-600 p-4 rounded text-white text-xl font-bold" data-url="/decks/speak-without-a-script.json">🎤 Speak Without A Script</button>`;
+    
+    document.querySelectorAll('.deck-select').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            const url = e.target.getAttribute('data-url');
+            const res = await fetch(url);
+            currentDeck = await res.json();
+            
+            document.getElementById('host-dashboard').classList.add('hidden');
+            document.getElementById('host-ui').classList.remove('hidden');
+            document.getElementById('display-room-code').innerText = currentRoom;
+            
+            onValue(ref(db, `rooms/${currentRoom}/players`), (snapshot) => {
+                players = snapshot.val() || {};
+            });
 
-        hostDashboard.classList.add('hidden');
-        hostUI.classList.remove('hidden');
-        document.getElementById('display-room-code').innerText = currentRoom;
-        
-        onValue(ref(db, `rooms/${currentRoom}/players`), (snapshot) => {
-            players = snapshot.val() || {};
-            drawCanvas();
+            initCanvas();
+            renderHTMLSlide();
+            setupClicker();
         });
-
-        initCanvas();
-        setupClicker();
     });
 });
 
-// ==========================================
-// HOST: CLICKER & PHYSICS
-// ==========================================
+function renderHTMLSlide() {
+    const slide = currentDeck.slides[slideIndex];
+    const layer = document.getElementById('html-slide-layer');
+    
+    // DIFFERENT TEMPLATES FOR DIFFERENT INFORMATION LAYERS
+    if (slide.template === "hero-image") {
+        layer.innerHTML = `
+            <div class="h-1/2 w-full bg-cover bg-center" style="background-image: url('${slide.layer1_image}')"></div>
+            <div class="p-10 flex flex-col justify-center flex-1 bg-white">
+                <h2 class="text-3xl text-gray-700 font-medium border-l-8 border-blue-500 pl-4 mb-6">${slide.layer2_text}</h2>
+                <!-- Layer 3 Hitbox (Host draws the magnifying glass on canvas over this area) -->
+                <div class="nerd-zone" data-l3="${slide.layer3_term}" data-l4="${slide.layer4_explanation}" data-l5="${slide.layer5_excerpt}">
+                    <span class="text-2xl font-bold text-blue-700">${slide.layer3_term}</span> 
+                    <span class="inline-block w-8 h-8 bg-yellow-400 text-center rounded-full ml-2">🔍</span>
+                </div>
+            </div>
+        `;
+    } else if (slide.template === "hero-text") {
+        layer.innerHTML = `
+            <div class="p-12 flex flex-col justify-center flex-1 bg-white">
+                <h1 class="text-6xl font-black text-gray-900 mb-6 tracking-tight uppercase">${slide.layer1_text}</h1>
+                <h2 class="text-3xl text-gray-700 font-medium border-l-8 border-blue-500 pl-4 mb-12">${slide.layer2_text}</h2>
+                <div class="nerd-zone" data-l3="${slide.layer3_term}" data-l4="${slide.layer4_explanation}" data-l5="${slide.layer5_excerpt}">
+                    <span class="text-2xl font-bold text-blue-700">${slide.layer3_term}</span> 
+                    <span class="inline-block w-8 h-8 bg-yellow-400 text-center rounded-full ml-2">🔍</span>
+                </div>
+            </div>
+        `;
+    }
+}
+
 function setupClicker() {
     window.addEventListener('keydown', (e) => {
-        if (['ArrowRight', 'PageDown', ' '].includes(e.key)) {
-            if (slideIndex < currentLevel.length - 1) {
-                slideIndex++;
-                handleSlideTransition();
-            }
-        } else if (['ArrowLeft', 'PageUp'].includes(e.key)) {
-            if (slideIndex > 0) {
-                slideIndex--;
-                handleSlideTransition();
-            }
+        if (['ArrowRight', 'PageDown', ' '].includes(e.key) && slideIndex < currentDeck.slides.length - 1) {
+            slideIndex++; renderHTMLSlide();
+        } else if (['ArrowLeft', 'PageUp'].includes(e.key) && slideIndex > 0) {
+            slideIndex--; renderHTMLSlide();
         }
     });
 }
 
-function handleSlideTransition() {
-    document.getElementById('slide-counter').innerText = `Slide ${slideIndex + 1}/${currentLevel.length}`;
-    const slideRules = currentLevel[slideIndex];
+// 60FPS HOST RENDER LOOP
+const canvas = document.getElementById('game-canvas');
+const ctx = canvas.getContext('2d');
+function initCanvas() {
+    const layer = document.getElementById('html-slide-layer');
+    canvas.width = layer.clientWidth;
+    canvas.height = layer.clientHeight;
+    requestAnimationFrame(hostLoop);
+}
 
-    if (!slideRules.roam) {
-        let updates = {};
-        Object.keys(players).forEach(pid => {
-            let p = players[pid];
-            if (p.x > slideRect.x && p.x < slideRect.x + slideRect.w &&
-                p.y > slideRect.y && p.y < slideRect.y + slideRect.h) {
-                updates[`rooms/${currentRoom}/players/${pid}/y`] = slideRect.y + slideRect.h + 50;
+function hostLoop() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const scaleX = canvas.width / LOGICAL_WIDTH;
+    const scaleY = canvas.height / LOGICAL_HEIGHT;
+
+    Object.keys(players).forEach(pid => {
+        const p = players[pid];
+        if(!p.x) return;
+        
+        // Host interprets Player's 'A' button to trigger their phone modal
+        if (p.btn_a) {
+            // (In a full build, we calculate X/Y overlap with .nerd-zone here)
+            const activeZone = document.querySelector('.nerd-zone');
+            if (activeZone) {
+                update(ref(db, `rooms/${currentRoom}/players/${pid}/modal`), {
+                    title: activeZone.getAttribute('data-l3'),
+                    body: activeZone.getAttribute('data-l4'),
+                    excerpt: activeZone.getAttribute('data-l5')
+                });
             }
-        });
-        if (Object.keys(updates).length > 0) {
-            update(ref(db), updates);
+            // Debounce the button in DB so it doesn't spam
+            update(ref(db, `rooms/${currentRoom}/players/${pid}`), { btn_a: false });
         }
-    }
-    drawCanvas();
+
+        // Draw Domino
+        const realX = p.x * scaleX;
+        const realY = p.y * scaleY;
+        ctx.fillStyle = p.color;
+        ctx.fillRect(realX - 18, realY - 27, 36, 54);
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(realX - 18, realY - 27, 36, 54);
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 12px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(p.initials, realX, realY - 5);
+        ctx.fillText(p.number, realX, realY + 15);
+    });
+    requestAnimationFrame(hostLoop);
 }
 
 // ==========================================
-// PLAYER LOGIC
+// PLAYER CONTROLLER
 // ==========================================
-document.getElementById('join-btn').addEventListener('click', () => {
-    const code = roomInput.value.toUpperCase();
-    const initials = initialsInput.value.toUpperCase();
-    
-    if (code.length !== 4) return alert("Enter a 4-digit code");
-    if (initials.length < 1) return alert("Enter your initials");
+let localX = 500;
+let localY = 500;
+const keys = { up: false, down: false, left: false, right: false };
+let btnA = false;
 
+document.getElementById('join-btn').addEventListener('click', () => {
+    const code = document.getElementById('room-code').value.toUpperCase();
+    const initials = document.getElementById('player-initials').value.toUpperCase();
+    
     onValue(ref(db, `rooms/${code}/created`), (snapshot) => {
         if (!snapshot.exists()) return alert("Room not found!");
         currentRoom = code;
 
-        const countRef = ref(db, `rooms/${currentRoom}/player_count`);
-        
-        runTransaction(countRef, (currentCount) => {
-            return (currentCount || 0) + 1;
-        }).then((result) => {
-            if (!result.committed) return alert("Failed to join room.");
-            
-            const joinNumber = result.snapshot.val() - 1; 
-            const formattedNumber = joinNumber.toString().padStart(2, '0');
-            const hue = (joinNumber * 137.5) % 360;
-            const myColor = `hsl(${hue}, 70%, 50%)`;
+        runTransaction(ref(db, `rooms/${currentRoom}/player_count`), (count) => (count || 0) + 1)
+        .then((result) => {
+            const num = (result.snapshot.val() - 1).toString().padStart(2, '0');
+            const color = `hsl(${(num * 137.5) % 360}, 70%, 50%)`;
 
-            const myPlayerRef = ref(db, `rooms/${currentRoom}/players/${myPlayerId}`);
-            
-            set(myPlayerRef, { 
-                x: window.innerWidth / 2, 
-                y: window.innerHeight - 100, 
-                color: myColor,
-                initials: initials.substring(0, 2),
-                number: formattedNumber
+            const playerRef = ref(db, `rooms/${currentRoom}/players/${myPlayerId}`);
+            set(playerRef, { x: localX, y: localY, color, initials: initials.substring(0,2), number: num });
+            onDisconnect(playerRef).remove();
+
+            // Listen for Modal Push from Host
+            onValue(ref(db, `rooms/${currentRoom}/players/${myPlayerId}/modal`), (snap) => {
+                if(snap.exists()) {
+                    const data = snap.val();
+                    document.getElementById('modal-term').innerText = data.title;
+                    document.getElementById('modal-explanation').innerText = data.body;
+                    document.getElementById('modal-excerpt').innerText = data.excerpt;
+                    document.getElementById('mobile-modal').classList.remove('hidden');
+                }
             });
-            
-            onDisconnect(myPlayerRef).remove();
 
-            lobbyUI.classList.add('hidden');
-            playerUI.classList.remove('hidden');
+            document.getElementById('lobby-ui').classList.add('hidden');
+            document.getElementById('player-ui').classList.remove('hidden');
+            document.getElementById('player-room-display').innerText = currentRoom;
             
-            const dominoNode = document.getElementById('player-domino');
-            dominoNode.style.backgroundColor = myColor;
-            document.getElementById('domino-initials').innerText = initials;
-            document.getElementById('domino-number').innerText = formattedNumber;
-
-            setupControls(myPlayerRef);
+            setupMobileControls();
         });
     }, { onlyOnce: true });
 });
 
-function setupControls(playerRef) {
-    const speed = 25; 
-    
-    const move = (dx, dy) => {
-        const updateRef = ref(db, `rooms/${currentRoom}/players/${myPlayerId}`);
-        onValue(updateRef, (snap) => {
-            if (snap.exists()) {
-                const data = snap.val();
-                update(updateRef, { x: data.x + dx, y: data.y + dy });
-            }
-        }, { onlyOnce: true });
+function setupMobileControls() {
+    const bindBtn = (id, action) => {
+        const el = document.getElementById(id);
+        el.addEventListener('touchstart', (e) => { e.preventDefault(); action(true); });
+        el.addEventListener('touchend', (e) => { e.preventDefault(); action(false); });
+        el.addEventListener('mousedown', () => action(true));
+        el.addEventListener('mouseup', () => action(false));
     };
 
-    document.getElementById('btn-up').addEventListener('pointerdown', () => move(0, -speed));
-    document.getElementById('btn-down').addEventListener('pointerdown', () => move(0, speed));
-    document.getElementById('btn-left').addEventListener('pointerdown', () => move(-speed, 0));
-    document.getElementById('btn-right').addEventListener('pointerdown', () => move(speed, 0));
-}
-
-// ==========================================
-// RENDER LOGIC (Host Canvas)
-// ==========================================
-const canvas = document.getElementById('game-canvas');
-const ctx = canvas.getContext('2d');
-
-function initCanvas() {
-    window.addEventListener('resize', calculateSlideBoundary);
-    calculateSlideBoundary();
-    handleSlideTransition(); 
-}
-
-function calculateSlideBoundary() {
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
+    bindBtn('btn-up', v => keys.up = v);
+    bindBtn('btn-down', v => keys.down = v);
+    bindBtn('btn-left', v => keys.left = v);
+    bindBtn('btn-right', v => keys.right = v);
     
-    let targetRatio = 16 / 9;
-    let windowRatio = canvas.width / canvas.height;
-    
-    if (windowRatio > targetRatio) {
-        slideRect.h = canvas.height * 0.8; 
-        slideRect.w = slideRect.h * targetRatio;
-    } else {
-        slideRect.w = canvas.width * 0.8;
-        slideRect.h = slideRect.w / targetRatio;
-    }
-    
-    slideRect.x = (canvas.width - slideRect.w) / 2;
-    slideRect.y = (canvas.height - slideRect.h) / 2;
-    drawCanvas();
-}
+    bindBtn('btn-a', v => { if(v) btnA = true; }); // Send true pulse
+    bindBtn('btn-b', v => { if(v) document.getElementById('mobile-modal').classList.add('hidden'); });
 
-function drawCanvas() {
-    if(!currentLevel[slideIndex]) return;
-    
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    const slide = currentLevel[slideIndex];
-    
-    // 16:9 Slide Background
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(slideRect.x, slideRect.y, slideRect.w, slideRect.h);
-    
-    // Slide Title
-    ctx.fillStyle = '#000000';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.font = 'bold 40px sans-serif';
-    ctx.fillText(slide.title, slideRect.x + (slideRect.w/2), slideRect.y + (slideRect.h/2));
+    // Local 60FPS physics
+    setInterval(() => {
+        let dx = 0, dy = 0;
+        if(keys.up) dy -= 1;
+        if(keys.down) dy += 1;
+        if(keys.left) dx -= 1;
+        if(keys.right) dx += 1;
 
-    // Dominoes
-    const width = 36, height = 54;
-    Object.values(players).forEach(p => {
-        ctx.fillStyle = p.color;
-        ctx.fillRect(p.x - width/2, p.y - height/2, width, height);
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(p.x - width/2, p.y - height/2, width, height);
-        
-        ctx.beginPath();
-        ctx.moveTo(p.x - width/2, p.y);
-        ctx.lineTo(p.x + width/2, p.y);
-        ctx.stroke();
+        if(dx !== 0 || dy !== 0) {
+            const len = Math.sqrt(dx*dx + dy*dy);
+            localX = Math.max(0, Math.min(LOGICAL_WIDTH, localX + (dx/len) * 5));
+            localY = Math.max(0, Math.min(LOGICAL_HEIGHT, localY + (dy/len) * 5));
+        }
+    }, 1000/60);
 
-        ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 14px sans-serif';
-        ctx.shadowColor = "rgba(0,0,0,0.5)";
-        ctx.shadowBlur = 4;
-        ctx.fillText(p.initials, p.x, p.y - height/4);
-        ctx.fillText(p.number, p.x, p.y + height/4);
-        ctx.shadowBlur = 0;
-    });
+    // 10Hz Firebase Sync (Saves Database Quota)
+    setInterval(() => {
+        let updates = { x: localX, y: localY };
+        if(btnA) { updates.btn_a = true; btnA = false; }
+        update(ref(db, `rooms/${currentRoom}/players/${myPlayerId}`), updates);
+    }, 100);
 }
