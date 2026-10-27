@@ -1,0 +1,22 @@
+{
+  "id": "speak-without-a-script",
+  "title": "Speak Without A Script",
+  "slides": [
+    {
+      "template": "hero-image",
+      "layer1_image": "https://images.unsplash.com/photo-1544531586-fde5298cdd40?w=800",
+      "layer2_text": "Why do we go blank? Just like a pro golfer missing a 1-foot putt, pressure causes a panic response.",
+      "layer3_term": "Sympathetic Adrenomedullary System",
+      "layer4_explanation": "The SAM axis initiates the fight-or-flight response, reducing working memory. You don't lose intelligence; you lose access to it.",
+      "layer5_excerpt": "Source: Tom Hendrick Public Speaking Library (Skill inhibition)."
+    },
+    {
+      "template": "hero-text",
+      "layer1_text": "The Routine",
+      "layer2_text": "We need a routine to calm our brain and our audience.",
+      "layer3_term": "Self-Regulation & Co-Regulation",
+      "layer4_explanation": "Self-regulation lowers cognitive load to stop panic. Co-regulation calms the audience by proving you won't ramble.",
+      "layer5_excerpt": "Source: Repeat & Count Workshop."
+    }
+  ]
+}
