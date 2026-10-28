@@ -38,14 +38,22 @@ document.getElementById('host-btn').addEventListener('click', async () => {
 
     // Fetch Available Decks
     const deckList = document.getElementById('deck-list');
-    deckList.innerHTML = `<button class="deck-select bg-blue-600 p-4 rounded text-white text-xl font-bold" data-url="/decks/speak-without-a-script.json">🎤 Speak Without A Script</button>`;
+    deckList.innerHTML = `<button class="deck-select bg-blue-600 hover:bg-blue-500 transition p-4 rounded text-white text-xl font-bold w-full" data-url="/decks/speak-without-a-script.json">🎤 Speak Without A Script</button>`;
     
     document.querySelectorAll('.deck-select').forEach(btn => {
         btn.addEventListener('click', async (e) => {
+            // 1. Fetch JSON
             const url = e.target.getAttribute('data-url');
             const res = await fetch(url);
             currentDeck = await res.json();
             
+            // 2. Preload Images (Show loading state on button)
+            const originalText = e.target.innerText;
+            e.target.innerText = "Loading assets...";
+            await preloadImages(currentDeck.slides);
+            e.target.innerText = originalText;
+            
+            // 3. Start Presentation
             document.getElementById('host-dashboard').classList.add('hidden');
             document.getElementById('host-ui').classList.remove('hidden');
             document.getElementById('display-room-code').innerText = currentRoom;
@@ -61,35 +69,230 @@ document.getElementById('host-btn').addEventListener('click', async () => {
     });
 });
 
+// ==========================================
+// IMAGE PRELOADER
+// ==========================================
+async function preloadImages(slides) {
+    const promises = slides.map(slide => {
+        return new Promise((resolve) => {
+            // Find any key in the slide JSON that contains the word "image"
+            const imgKeys = Object.keys(slide).filter(k => k.includes('image'));
+            if (imgKeys.length === 0) {
+                resolve();
+                return;
+            }
+            
+            let loaded = 0;
+            imgKeys.forEach(key => {
+                if (slide[key]) {
+                    const img = new Image();
+                    img.onload = () => { loaded++; if (loaded === imgKeys.length) resolve(); };
+                    img.onerror = () => { loaded++; if (loaded === imgKeys.length) resolve(); };
+                    img.src = slide[key];
+                } else {
+                    loaded++; if (loaded === imgKeys.length) resolve();
+                }
+            });
+        });
+    });
+    await Promise.all(promises);
+    console.log("All images preloaded.");
+}
+
+// ==========================================
+// HOST RENDERING LOGIC (18 Templates)
+// ==========================================
+function createNerdZone(l3_term, l4_exp, l5_src) {
+    if (!l3_term && !l4_exp) return '';
+    return `
+        <div class="nerd-zone inline-flex items-center gap-4 bg-gray-50 p-4 rounded-xl border border-gray-200 shadow-sm" 
+             data-l3="${l3_term || ''}" data-l4="${l4_exp || ''}" data-l5="${l5_src || ''}">
+            <span class="text-2xl font-bold text-blue-700">${l3_term || 'Interact'}</span> 
+            <span class="w-10 h-10 bg-yellow-400 text-yellow-900 flex items-center justify-center rounded-full shadow font-bold text-lg animate-pulse">A</span>
+        </div>
+    `;
+}
+
 function renderHTMLSlide() {
-    const slide = currentDeck.slides[slideIndex];
+    const s = currentDeck.slides[slideIndex];
     const layer = document.getElementById('html-slide-layer');
     
-    // DIFFERENT TEMPLATES FOR DIFFERENT INFORMATION LAYERS
-    if (slide.template === "hero-image") {
-        layer.innerHTML = `
-            <div class="h-1/2 w-full bg-cover bg-center" style="background-image: url('${slide.layer1_image}')"></div>
-            <div class="p-10 flex flex-col justify-center flex-1 bg-white">
-                <h2 class="text-3xl text-gray-700 font-medium border-l-8 border-blue-500 pl-4 mb-6">${slide.layer2_text}</h2>
-                <!-- Layer 3 Hitbox (Host draws the magnifying glass on canvas over this area) -->
-                <div class="nerd-zone" data-l3="${slide.layer3_term}" data-l4="${slide.layer4_explanation}" data-l5="${slide.layer5_excerpt}">
-                    <span class="text-2xl font-bold text-blue-700">${slide.layer3_term}</span> 
-                    <span class="inline-block w-8 h-8 bg-yellow-400 text-center rounded-full ml-2">🔍</span>
+    // Helper to render an H1 (Text or Image)
+    const renderH1 = (text, img, classes = "text-6xl font-black text-gray-900 uppercase tracking-tight") => {
+        if (img && text) return `<div class="relative w-full h-full min-h-[300px] bg-cover bg-center rounded-xl overflow-hidden shadow-lg" style="background-image: url('${img}')"><div class="absolute inset-0 bg-black/40 flex items-center justify-center p-8"><h1 class="${classes} text-white text-center">${text}</h1></div></div>`;
+        if (img) return `<div class="w-full h-full min-h-[300px] bg-cover bg-center rounded-xl shadow-lg" style="background-image: url('${img}')"></div>`;
+        return `<h1 class="${classes}">${text || ''}</h1>`;
+    };
+
+    // Helper to render an H2
+    const renderH2 = (text, img) => {
+        let html = `<div class="flex flex-col gap-4">`;
+        if (img) html += `<img src="${img}" class="w-32 h-32 object-cover rounded-lg shadow" />`;
+        if (text) html += `<h2 class="text-3xl text-gray-700 font-medium leading-relaxed border-l-8 border-blue-500 pl-4">${text}</h2>`;
+        html += `</div>`;
+        return html;
+    };
+
+    // Helper for visible H3/H4 (Non-hidden)
+    const renderH3 = (term) => term ? `<div class="inline-block bg-blue-100 text-blue-800 text-2xl font-bold px-6 py-3 rounded-full">${term}</div>` : '';
+    const renderH4 = (exp) => exp ? `<div class="text-xl text-gray-600 bg-gray-100 p-6 rounded-lg border border-gray-300">${exp}</div>` : '';
+
+    let content = `<div class="p-12 w-full h-full flex flex-col justify-center bg-white gap-8">`;
+
+    // THE 18 TEMPLATE ROUTER
+    switch (s.template.split('_')[0]) { 
+        
+        // --- FAMILIAR INFO (1-4 Bits) ---
+        case 'S1-H1': 
+            content += `<div class="flex-1 flex items-center justify-center text-center">${renderH1(s.layer1_text, s.layer1_image, "text-8xl font-black text-gray-900 uppercase tracking-tighter")}</div>`;
+            break;
+            
+        case 'S2-H1s': 
+            content += `<div class="flex-1 grid grid-cols-2 gap-8 h-full">
+                ${renderH1(s.layer1_text_a, s.layer1_image_a)}
+                ${renderH1(s.layer1_text_b, s.layer1_image_b)}
+            </div>`;
+            break;
+            
+        case 'S3-H1-H2': 
+            content += `
+                ${renderH1(s.layer1_text, s.layer1_image)}
+                <div class="mt-8">${renderH2(s.layer2_text, s.layer2_image)}</div>`;
+            break;
+
+        case 'S4-H1-H1-H1': 
+            content += `<div class="flex-1 grid grid-cols-3 gap-6 h-full">
+                ${renderH1(s.layer1_text_a, s.layer1_image_a)}
+                ${renderH1(s.layer1_text_b, s.layer1_image_b)}
+                ${renderH1(s.layer1_text_c, s.layer1_image_c)}
+            </div>`;
+            break;
+
+        case 'S5-H1s-H2': 
+            content += `
+                <div class="grid grid-cols-2 gap-8 h-1/2 mb-8">
+                    ${renderH1(s.layer1_text_a, s.layer1_image_a)}
+                    ${renderH1(s.layer1_text_b, s.layer1_image_b)}
                 </div>
-            </div>
-        `;
-    } else if (slide.template === "hero-text") {
-        layer.innerHTML = `
-            <div class="p-12 flex flex-col justify-center flex-1 bg-white">
-                <h1 class="text-6xl font-black text-gray-900 mb-6 tracking-tight uppercase">${slide.layer1_text}</h1>
-                <h2 class="text-3xl text-gray-700 font-medium border-l-8 border-blue-500 pl-4 mb-12">${slide.layer2_text}</h2>
-                <div class="nerd-zone" data-l3="${slide.layer3_term}" data-l4="${slide.layer4_explanation}" data-l5="${slide.layer5_excerpt}">
-                    <span class="text-2xl font-bold text-blue-700">${slide.layer3_term}</span> 
-                    <span class="inline-block w-8 h-8 bg-yellow-400 text-center rounded-full ml-2">🔍</span>
+                ${renderH2(s.layer2_text, null)}`;
+            break;
+
+        case 'S6-H1-H2s': 
+            content += `<div class="grid grid-cols-2 gap-12 h-full items-center">
+                ${renderH1(s.layer1_text, s.layer1_image)}
+                <div class="flex flex-col gap-12">
+                    ${renderH2(s.layer2_text_a, s.layer2_image_a)}
+                    ${renderH2(s.layer2_text_b, s.layer2_image_b)}
                 </div>
-            </div>
-        `;
+            </div>`;
+            break;
+
+        case 'S7-H1s-H2s': 
+            content += `<div class="grid grid-cols-2 gap-12 h-full">
+                <div class="flex flex-col gap-6">${renderH1(s.layer1_text_a, s.layer1_image_a)} ${renderH2(s.layer2_text_a)}</div>
+                <div class="flex flex-col gap-6">${renderH1(s.layer1_text_b, s.layer1_image_b)} ${renderH2(s.layer2_text_b)}</div>
+            </div>`;
+            break;
+
+        // --- SIMPLE INFO (3-4 Bits) ---
+        case 'S8-H1-H2-H3': 
+        case 'S9-H1-H2-H3': 
+        case 'S10-H1-H2-H3': 
+        case 'S11-H1-H2-H3': 
+            content += `
+                ${renderH1(s.layer1_text, s.layer1_image)}
+                ${renderH2(s.layer2_text, s.layer2_image)}
+                <div class="mt-auto">${renderH3(s.layer3_term)}</div>
+            `;
+            break;
+
+        case 'S12-H1-H2-H3-H4': 
+            content += `
+                ${renderH1(s.layer1_text, s.layer1_image)}
+                ${renderH2(s.layer2_text, s.layer2_image)}
+                <div class="grid grid-cols-2 gap-8 mt-auto items-center">
+                    ${renderH3(s.layer3_term)}
+                    ${renderH4(s.layer4_explanation)}
+                </div>
+            `;
+            break;
+
+        // --- COMPLEX INFO (5 Bits - Nerd Zones Required) ---
+        case 'S13-H1s-H2s-H3z': 
+            content += `<div class="grid grid-cols-2 gap-12 h-full relative">
+                <div class="flex flex-col gap-4">${renderH1(s.layer1_text_a, s.layer1_image_a)} ${renderH2(s.layer2_text_a)}</div>
+                <div class="flex flex-col gap-4">${renderH1(s.layer1_text_b, s.layer1_image_b)} ${renderH2(s.layer2_text_b)}</div>
+                <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <div class="pointer-events-auto bg-white p-2 rounded-xl shadow-2xl">
+                        ${createNerdZone(s.layer3_term, s.layer4_explanation, s.layer5_excerpt)}
+                    </div>
+                </div>
+            </div>`;
+            break;
+
+        case 'S14-H1-H2s-H3s': 
+            content += `
+                ${renderH1(s.layer1_text, s.layer1_image)}
+                <div class="grid grid-cols-2 gap-12 mt-6 flex-1">
+                    <div class="flex flex-col justify-between">${renderH2(s.layer2_text_a)} ${renderH3(s.layer3_term_a)}</div>
+                    <div class="flex flex-col justify-between">${renderH2(s.layer2_text_b)} 
+                        <div class="self-start">${createNerdZone("Missing Concept", s.layer3_term_b, s.layer5_excerpt)}</div>
+                    </div>
+                </div>
+            `;
+            break;
+
+        case 'S15-H1s-H2-H3-H4z': 
+            content += `
+                <div class="grid grid-cols-2 gap-8 h-1/3 mb-6">
+                    ${renderH1(s.layer1_text_a, s.layer1_image_a)}
+                    ${renderH1(s.layer1_text_b, s.layer1_image_b)}
+                </div>
+                ${renderH2(s.layer2_text)}
+                <div class="mt-auto self-start">${createNerdZone(s.layer3_term, s.layer4_explanation, s.layer5_excerpt)}</div>
+            `;
+            break;
+
+        case 'S16-H1-H2s-H3-H4z': 
+            content += `<div class="grid grid-cols-2 gap-12 h-full items-center">
+                ${renderH1(s.layer1_text, s.layer1_image)}
+                <div class="flex flex-col gap-8">
+                    ${renderH2(s.layer2_text_a)}
+                    ${renderH2(s.layer2_text_b)}
+                    ${createNerdZone(s.layer3_term, s.layer4_explanation, s.layer5_excerpt)}
+                </div>
+            </div>`;
+            break;
+
+        case 'S17-H1-H2-H3s-H4z': 
+            content += `
+                ${renderH1(s.layer1_text, s.layer1_image)}
+                ${renderH2(s.layer2_text)}
+                <div class="grid grid-cols-2 gap-8 mt-auto">
+                    ${renderH3(s.layer3_term_a)}
+                    <div class="self-start">${createNerdZone(s.layer3_term_b, s.layer4_explanation, s.layer5_excerpt)}</div>
+                </div>
+            `;
+            break;
+
+        case 'S18-H1-H2-H3-H4-H5z': 
+            content += `
+                ${renderH1(s.layer1_text, s.layer1_image)}
+                ${renderH2(s.layer2_text)}
+                <div class="grid grid-cols-2 gap-8 mt-4 items-center flex-1">
+                    <div>${renderH3(s.layer3_term)}</div>
+                    <div>${renderH4(s.layer4_explanation)}</div>
+                </div>
+                <div class="mt-4 self-end">${createNerdZone("Source / Excerpt", "Read the technical excerpt.", s.layer5_excerpt)}</div>
+            `;
+            break;
+
+        default:
+            content += `<h1 class="text-4xl text-red-500">Template ${s.template} not recognized.</h1>`;
     }
+
+    content += `</div>`;
+    layer.innerHTML = content;
 }
 
 function setupClicker() {
@@ -102,7 +305,9 @@ function setupClicker() {
     });
 }
 
+// ==========================================
 // 60FPS HOST RENDER LOOP
+// ==========================================
 const canvas = document.getElementById('game-canvas');
 const ctx = canvas.getContext('2d');
 function initCanvas() {
@@ -123,9 +328,11 @@ function hostLoop() {
         
         // Host interprets Player's 'A' button to trigger their phone modal
         if (p.btn_a) {
-            // (In a full build, we calculate X/Y overlap with .nerd-zone here)
+            // Very simple distance check to trigger Nerd Zone
             const activeZone = document.querySelector('.nerd-zone');
             if (activeZone) {
+                // In a production app, we would calculate actual bounding box overlap here.
+                // For now, if the zone exists and A is pressed, trigger the modal.
                 update(ref(db, `rooms/${currentRoom}/players/${pid}/modal`), {
                     title: activeZone.getAttribute('data-l3'),
                     body: activeZone.getAttribute('data-l4'),
@@ -133,7 +340,7 @@ function hostLoop() {
                 });
             }
             // Debounce the button in DB so it doesn't spam
-            update(ref(db, `rooms/${currentRoom}/players/${pid}`), { btn_a: false });
+            update(ref(db, `rooms/${currentRoom}/players/${pid}`), { btn_a: null });
         }
 
         // Draw Domino
@@ -182,9 +389,9 @@ document.getElementById('join-btn').addEventListener('click', () => {
             onValue(ref(db, `rooms/${currentRoom}/players/${myPlayerId}/modal`), (snap) => {
                 if(snap.exists()) {
                     const data = snap.val();
-                    document.getElementById('modal-term').innerText = data.title;
-                    document.getElementById('modal-explanation').innerText = data.body;
-                    document.getElementById('modal-excerpt').innerText = data.excerpt;
+                    document.getElementById('modal-term').innerText = data.title || '';
+                    document.getElementById('modal-explanation').innerText = data.body || '';
+                    document.getElementById('modal-excerpt').innerText = data.excerpt || '';
                     document.getElementById('mobile-modal').classList.remove('hidden');
                 }
             });
