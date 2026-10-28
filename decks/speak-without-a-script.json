@@ -3,20 +3,127 @@
   "title": "Speak Without A Script",
   "slides": [
     {
-      "template": "hero-image",
-      "layer1_image": "https://images.unsplash.com/photo-1544531586-fde5298cdd40?w=800",
-      "layer2_text": "Why do we go blank? Just like a pro golfer missing a 1-foot putt, pressure causes a panic response.",
-      "layer3_term": "Sympathetic Adrenomedullary System",
-      "layer4_explanation": "The SAM axis initiates the fight-or-flight response, reducing working memory. You don't lose intelligence; you lose access to it.",
-      "layer5_excerpt": "Source: Tom Hendrick Public Speaking Library (Skill inhibition)."
+      "template": "S1-H1",
+      "layer1_text": "Speak Without A Script"
     },
     {
-      "template": "hero-text",
-      "layer1_text": "The Routine",
-      "layer2_text": "We need a routine to calm our brain and our audience.",
-      "layer3_term": "Self-Regulation & Co-Regulation",
-      "layer4_explanation": "Self-regulation lowers cognitive load to stop panic. Co-regulation calms the audience by proving you won't ramble.",
-      "layer5_excerpt": "Source: Repeat & Count Workshop."
+      "template": "S2-H1s",
+      "layer1_text_a": "Pressure",
+      "layer1_text_b": "Preparation"
+    },
+    {
+      "template": "S3-H1-H2",
+      "layer1_text": "Why do we go blank?",
+      "layer2_text": "Pressure triggers a panic response, just like a pro golfer missing a 1-foot putt."
+    },
+    {
+      "template": "S4-H1-H1-H1",
+      "layer1_text_a": "Cognitive",
+      "layer1_text_b": "Associative",
+      "layer1_text_c": "Autonomous"
+    },
+    {
+      "template": "S5-H1s-H2",
+      "layer1_text_a": "High Effort",
+      "layer1_text_b": "Low Effort",
+      "layer2_text": "With practice, saying the right thing becomes automatic, freeing up your cognitive load."
+    },
+    {
+      "template": "S6-H1-H2s",
+      "layer1_text": "The 3 Goals",
+      "layer2_text_a": "Self-Regulate: Calm and focus your own brain.",
+      "layer2_text_b": "Co-Regulate: Reassure your audience you won't ramble."
+    },
+    {
+      "template": "S7-H1s-H2s",
+      "layer1_text_a": "Routine",
+      "layer2_text_a": "Bypasses the panic response.",
+      "layer1_text_b": "Word Association",
+      "layer2_text_b": "Unlocks dormant knowledge."
+    },
+    {
+      "template": "S8-H1-H2-H3",
+      "layer1_text": "The Solution",
+      "layer2_text": "Say the prompt back to buy time, then split your answer into related parts.",
+      "layer3_term": "Repeat & Count"
+    },
+    {
+      "template": "S9-H1-H2-H3",
+      "layer1_text": "Step 1: Repeat",
+      "layer1_image": "https://images.unsplash.com/photo-1476820865390-c52aeafa985d?w=800&q=80",
+      "layer2_text": "Articulating the prompt forces you to connect with the audience.",
+      "layer3_term": "Word Repeat"
+    },
+    {
+      "template": "S10-H1-H2-H3",
+      "layer1_text": "Step 2: Count",
+      "layer2_text": "Declare a fixed number of related topics.",
+      "layer2_image": "https://images.unsplash.com/photo-1516321497487-e288fb19713f?w=800&q=80",
+      "layer3_term": "Fixed Patterns"
+    },
+    {
+      "template": "S11-H1-H2-H3",
+      "layer1_text": "Step 3: Example",
+      "layer2_text": "Deliver quality content relating to each count.",
+      "layer3_term": "Easy Listening Thresholds"
+    },
+    {
+      "template": "S12-H1-H2-H3-H4",
+      "layer1_text": "Delivery Metrics",
+      "layer2_text": "Your examples must hit specific pacing and pause targets.",
+      "layer3_term": "Syllables / Sec",
+      "layer4_explanation": "The Mumble Meter: Aim for 3.5 to 4.5 syllables per second for crisp, energetic delivery."
+    },
+    {
+      "template": "S13-H1s-H2s-H3z",
+      "layer1_text_a": "Statement Repeat",
+      "layer2_text_a": "Turn the question into a confident claim.",
+      "layer1_text_b": "Question Repeat",
+      "layer2_text_b": "Bounce the prompt back to buy time.",
+      "layer3_term": "Clarify in 2",
+      "layer4_explanation": "Split the question into two specific comparables to show expertise before committing to an answer."
+    },
+    {
+      "template": "S14-H1-H2s-H3s",
+      "layer1_text": "Counting Strategies",
+      "layer2_text_a": "The 2-Part Count",
+      "layer3_term_a": "Wrong + Right",
+      "layer2_text_b": "The 3-Part Count",
+      "layer3_term_b": "Small, Medium, Large",
+      "layer4_explanation": "Triplicates are less concise than comparables, but they reveal exponential trends.",
+      "layer5_excerpt": "Source: Pattern Communication (The Rule of Three)."
+    },
+    {
+      "template": "S15-H1s-H2-H3-H4z",
+      "layer1_text_a": "Personal Content",
+      "layer1_text_b": "Visual Content",
+      "layer2_text": "Balance storytelling (30-60%) with sensory words (20-50%) to paint a picture.",
+      "layer3_term": "Intangible Load",
+      "layer4_explanation": "Keep abstract concepts and filler between 10 and 30 percent to avoid being too theoretical or academic."
+    },
+    {
+      "template": "S16-H1-H2s-H3-H4z",
+      "layer1_image": "https://images.unsplash.com/photo-1516280440502-3c2c19c3b88b?w=800&q=80",
+      "layer2_text_a": "Runtime Limits (3.0s - 6.0s)",
+      "layer2_text_b": "Plain English (80 - 90% common words)",
+      "layer3_term": "Comp. Grade",
+      "layer4_explanation": "The reading comprehension grade level of your speech should be between 5.0 and 10.0 for maximum reach."
+    },
+    {
+      "template": "S17-H1-H2-H3s-H4z",
+      "layer1_text": "Pattern Architecture",
+      "layer2_text": "Patterns contain info between and beyond the examples.",
+      "layer3_term_a": "Comparables",
+      "layer3_term_b": "Triplicates",
+      "layer4_explanation": "Three is the smallest number needed to create a confident pattern, allowing audiences to 'continue' the info themselves."
+    },
+    {
+      "template": "S18-H1-H2-H3-H4-H5z",
+      "layer1_text": "Skill Inhibition",
+      "layer2_text": "Pressure causes a biological panic response, inhibiting your access to your own intelligence.",
+      "layer3_term": "Sympathetic Adrenomedullary System",
+      "layer4_explanation": "The SAM axis initiates the fight-or-flight response, reducing working memory capacity.",
+      "layer5_excerpt": "\"Skill inhibition is caused by the sympathetic adreno-medullary system... it's not a skill acquisition problem, it's an inhibition problem.\" (Tom Hendrick Public Speaking Library)"
     }
   ]
 }
